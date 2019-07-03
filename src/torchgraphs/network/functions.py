@@ -40,6 +40,7 @@ class GlobalReLU(GlobalFunction):
     def __init__(self):
         super(GlobalReLU, self).__init__(torch.nn.functional.relu)
 
+
 class NodeSigmoid(NodeFunction):
     def __init__(self):
         super(NodeSigmoid, self).__init__(torch.sigmoid)
@@ -55,16 +56,16 @@ class GlobalSigmoid(GlobalFunction):
         super(GlobalSigmoid, self).__init__(torch.sigmoid)
 
 
-class EdgeDroput(torch.nn.Dropout):
-    def forward(self, graphs):
-        return graphs.evolve(edge_features=super(EdgeDroput, self).forward(graphs.edge_features))
+class EdgeDropout(EdgeFunction):
+    def __init__(self, p=0.5, inplace=False):
+        super(EdgeDropout, self).__init__(torch.nn.Dropout(p, inplace))
 
 
-class NodeDroput(torch.nn.Dropout):
-    def forward(self, graphs):
-        return graphs.evolve(node_features=super(NodeDroput, self).forward(graphs.node_features))
+class NodeDropout(NodeFunction):
+    def __init__(self, p=0.5, inplace=False):
+        super(NodeDropout, self).__init__(torch.nn.Dropout(p, inplace))
 
 
-class GlobalDroput(torch.nn.Dropout):
-    def forward(self, graphs):
-        return graphs.evolve(global_features=super(GlobalDroput, self).forward(graphs.global_features))
+class GlobalDropout(GlobalFunction):
+    def __init__(self, p=0.5, inplace=False):
+        super(GlobalDropout, self).__init__(torch.nn.Dropout(p, inplace))

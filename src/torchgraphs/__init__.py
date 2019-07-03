@@ -6,4 +6,4 @@ from .network import GraphNetwork, \
     EdgeFunction, NodeFunction, GlobalFunction, \
     EdgeReLU, NodeReLU, GlobalReLU, \
     EdgeSigmoid, NodeSigmoid, GlobalSigmoid, \
-    EdgeDroput, NodeDroput, GlobalDroput
+    EdgeDropout, NodeDropout, GlobalDropout
