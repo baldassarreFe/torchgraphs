@@ -41,7 +41,7 @@ class EdgeLinear(nn.Module):
             new_edges += repeat_tensor(
                 graphs.global_features @ self.W_global.t(), dim=0, repeats=graphs.num_edges_by_graph)
         if self.bias is not None:
-            new_edges += self.bias
+            new_edges = new_edges + self.bias.expand(graphs.num_edges, -1)
 
         return graphs.evolve(edge_features=new_edges)
 
@@ -87,7 +87,7 @@ class NodeLinear(nn.Module):
             new_nodes += repeat_tensor(
                 graphs.global_features @ self.W_global.t(), dim=0, repeats=graphs.num_nodes_by_graph)
         if self.bias is not None:
-            new_nodes += self.bias
+            new_nodes = new_nodes + self.bias.expand(graphs.num_nodes, -1)
 
         return graphs.evolve(node_features=new_nodes)
 
@@ -131,7 +131,7 @@ class GlobalLinear(nn.Module):
         if self.W_global is not None:
             new_globals = new_globals + graphs.global_features @ self.W_global.t()
         if self.bias is not None:
-            new_globals += self.bias
+            new_globals = new_globals + self.bias.expand(graphs.num_graphs, -1)
 
         return graphs.evolve(global_features=new_globals)
 
