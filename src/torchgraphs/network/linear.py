@@ -5,7 +5,7 @@ import torch.nn as nn
 
 from .aggregation import get_aggregation
 from ..data import GraphBatch
-from ..utils import repeat_tensor, segment_lengths_to_ids
+from ..utils import segment_lengths_to_ids
 
 
 class EdgeLinear(nn.Module):
@@ -38,7 +38,7 @@ class EdgeLinear(nn.Module):
             new_edges += torch.index_select(
                 graphs.node_features @ self.W_receiver.t(), dim=0, index=graphs.receivers)
         if self.W_global is not None:
-            new_edges += repeat_tensor(
+            new_edges += torch.repeat_interleave(
                 graphs.global_features @ self.W_global.t(), dim=0, repeats=graphs.num_edges_by_graph)
         if self.bias is not None:
             new_edges = new_edges + self.bias.expand(graphs.num_edges, -1)
@@ -84,7 +84,7 @@ class NodeLinear(nn.Module):
             new_nodes += self.aggregation(
                 graphs.edge_features, dim=0, index=graphs.senders, dim_size=graphs.num_nodes) @ self.W_outgoing.t()
         if self.W_global is not None:
-            new_nodes += repeat_tensor(
+            new_nodes += torch.repeat_interleave(
                 graphs.global_features @ self.W_global.t(), dim=0, repeats=graphs.num_nodes_by_graph)
         if self.bias is not None:
             new_nodes = new_nodes + self.bias.expand(graphs.num_nodes, -1)

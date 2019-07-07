@@ -32,6 +32,9 @@ def repeat_tensor(input: torch.Tensor, repeats: torch.LongTensor, dim: int = 0) 
         >>> x.grad
         tensor([2., 3., 0., 1.])
     """
+    import warnings
+    warnings.warn('Use torch.repeat_interleave instead of torchgraphs.utils.repeat_tensor', DeprecationWarning)
+
     if repeats.dim() != 1:
         raise ValueError(f'`repeats` should have a single dimension, got shape {repeats.shape}')
     if (repeats < 0).any():
@@ -56,12 +59,7 @@ def segment_lengths_to_ids(segment_lengths: torch.LongTensor) -> torch.LongTenso
         >>> segment_lengths_to_slices(segments)
         tensor([0, 0, 1, 1, 1, 1, 2, 2, 2, 3])
     """
-    if segment_lengths.dim() != 1:
-        raise ValueError(f'`segment_lengths` should have a single dimension, got shape {segment_lengths.shape}')
-    if (segment_lengths < 0).any():
-        raise ValueError(f'All entries in `segment_lengths` should be non-negative')
-
-    return segment_lengths.new_tensor(np.arange(len(segment_lengths)).repeat(segment_lengths.cpu().numpy()))
+    return torch.repeat_interleave(torch.arange(len(segment_lengths), device=segment_lengths.device), segment_lengths)
 
 
 def segment_lengths_to_slices(segment_lengths: torch.LongTensor) -> typing.Iterator[slice]:

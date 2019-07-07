@@ -11,7 +11,7 @@ from torch.utils.data._utils.collate import default_collate
 
 from .base import _BaseGraph
 from .graph import Graph
-from ..utils import segment_lengths_to_slices, segment_lengths_to_ids, repeat_tensor
+from ..utils import segment_lengths_to_slices, segment_lengths_to_ids
 
 
 @dataclasses.dataclass
@@ -130,7 +130,7 @@ class GraphBatch(_BaseGraph):
         Returns:
             a tensor of shape `(num_edges, *global_features_shape)`
         """
-        return repeat_tensor(self.global_features, self.num_edges_by_graph)
+        return torch.repeat_interleave(self.global_features, self.num_edges_by_graph)
 
     def global_features_as_nodes(self) -> torch.Tensor:
         """Broadcast `global_features` along the the first dimension to match `node_features`,
@@ -139,7 +139,7 @@ class GraphBatch(_BaseGraph):
         Returns:
             a tensor of shape `(num_nodes, *global_features_shape)`
         """
-        return repeat_tensor(self.global_features, self.num_nodes_by_graph)
+        return torch.repeat_interleave(self.global_features, self.num_nodes_by_graph)
 
     def __getitem__(self, graph_index):
         """Use for random access, as in `batch[i]`. For sequential access use `iter(batch)` or `for g in batch`
