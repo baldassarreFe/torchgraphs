@@ -5,7 +5,6 @@ import torch.nn as nn
 
 from .aggregation import get_aggregation
 from ..data import GraphBatch
-from ..utils import segment_lengths_to_ids
 
 
 class EdgeLinear(nn.Module):
@@ -121,13 +120,11 @@ class GlobalLinear(nn.Module):
         new_globals = 0
 
         if self.W_node is not None:
-            index = segment_lengths_to_ids(graphs.num_nodes_by_graph)
-            new_globals = new_globals + self.aggregation(
-                graphs.node_features, dim=0, index=index, dim_size=graphs.num_graphs) @ self.W_node.t()
+            new_globals = new_globals + self.aggregation(graphs.node_features, index=graphs.node_index_by_graph,
+                                                         dim=0, dim_size=graphs.num_graphs) @ self.W_node.t()
         if self.W_edges is not None:
-            index = segment_lengths_to_ids(graphs.num_edges_by_graph)
-            new_globals = new_globals + self.aggregation(
-                graphs.edge_features, dim=0, index=index, dim_size=graphs.num_graphs) @ self.W_edges.t()
+            new_globals = new_globals + self.aggregation(graphs.edge_features, index=graphs.edge_index_by_graph,
+                                                         dim=0, dim_size=graphs.num_graphs) @ self.W_edges.t()
         if self.W_global is not None:
             new_globals = new_globals + graphs.global_features @ self.W_global.t()
         if self.bias is not None:

@@ -20,6 +20,8 @@ class GraphBatch(_BaseGraph):
     global_features: Optional[torch.Tensor] = None
     num_nodes_by_graph: torch.LongTensor = None
     num_edges_by_graph: torch.LongTensor = None
+    node_index_by_graph: torch.LongTensor = dataclasses.field(init=False)
+    edge_index_by_graph: torch.LongTensor = dataclasses.field(init=False)
 
     _feature_fields = _BaseGraph._feature_fields + ('global_features',)
     _index_fields = _BaseGraph._index_fields + ('num_nodes_by_graph', 'num_edges_by_graph')
@@ -41,6 +43,10 @@ class GraphBatch(_BaseGraph):
             self.num_nodes_by_graph = torch.zeros(self.num_graphs, dtype=torch.long)
         if self.num_edges_by_graph is None and self.num_edges == 0:
             self.num_edges_by_graph = torch.zeros(self.num_graphs, dtype=torch.long)
+
+        self.node_index_by_graph = segment_lengths_to_ids(self.num_nodes_by_graph)
+        self.edge_index_by_graph = segment_lengths_to_ids(self.num_edges_by_graph)
+
         super(GraphBatch, self).__post_init__()
 
     def _validate(self):
@@ -346,7 +352,7 @@ class _BatchNodeView(_BatchView):
 
     def __call__(self, aggregation) -> torch.Tensor:
         aggregation = self._pooling_functions[aggregation]
-        return aggregation(self._batch.node_features, segment_lengths_to_ids(self._batch.num_nodes_by_graph))
+        return aggregation(self._batch.node_features, self._batch.node_index_by_graph)
 
 
 class _BatchEdgeView(_BatchView):
@@ -367,4 +373,4 @@ class _BatchEdgeView(_BatchView):
 
     def __call__(self, aggregation) -> torch.Tensor:
         aggregation = self._pooling_functions[aggregation]
-        return aggregation(self._batch.edge_features, segment_lengths_to_ids(self._batch.num_edges_by_graph))
+        return aggregation(self._batch.edge_features, self._batch.edge_index_by_graph)
