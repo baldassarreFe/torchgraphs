@@ -46,6 +46,7 @@ def test_linear_graph_network(graphbatch: GraphBatch, device):
     net.to(device)
 
     result = net.forward(graphbatch)
+    result.validate()
 
     assert graphbatch.num_graphs == result.num_graphs
     assert graphbatch.num_nodes == result.num_nodes

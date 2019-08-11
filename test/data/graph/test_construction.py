@@ -3,6 +3,7 @@ import torch
 
 from torchgraphs import Graph
 
+
 def test_empty():
     graph = Graph()
     validate_graph(graph)
@@ -34,10 +35,10 @@ def test_nodes():
     assert graph.node_features_shape == (2,)
 
     with pytest.raises(ValueError):
-        Graph(num_nodes=-1)
+        Graph(num_nodes=-1).validate()
 
     with pytest.raises(ValueError):
-        Graph(num_nodes=0, node_features=torch.rand(15, 2))
+        Graph(num_nodes=0, node_features=torch.rand(15, 2)).validate()
 
 
 def test_edges():
@@ -51,53 +52,43 @@ def test_edges():
     assert graph.num_edges == len(graph.senders) == len(graph.receivers) == len(graph.edge_features) == 5
     assert graph.edge_features_shape == (2,)
 
-    # Negative number of edges
-    with pytest.raises(ValueError):
-        Graph(num_edges=-1)
-
-    # Senders and receivers not given
-    with pytest.raises(ValueError):
-        Graph(num_edges=3)
 
     # Senders not given
     with pytest.raises(ValueError):
-        Graph(num_edges=3, receivers=torch.arange(10))
+        Graph(receivers=torch.arange(10)).validate()
 
     # Receivers not given
     with pytest.raises(ValueError):
-        Graph(num_edges=3, senders=torch.arange(10))
-
-    # Senders and receivers given, but not matching number of edges
-    with pytest.raises(ValueError):
-        Graph(num_edges=3, senders=torch.arange(10), receivers=torch.arange(10))
+        Graph(senders=torch.arange(10)).validate()
 
     # Edges on a graph with no nodes
     with pytest.raises(ValueError):
-        Graph(senders=torch.tensor([0, 1, 2]), receivers=torch.tensor([3, 4, 5]))
+        Graph(senders=torch.tensor([0, 1, 2]), receivers=torch.tensor([3, 4, 5])).validate()
 
     # Different number of senders and receivers
     with pytest.raises(ValueError):
-        Graph(num_nodes=6, senders=torch.tensor([0]), receivers=torch.tensor([3, 4, 5]))
+        Graph(num_nodes=6, senders=torch.tensor([0]), receivers=torch.tensor([3, 4, 5])).validate()
 
     # Indexes out-of-bounds
     with pytest.raises(ValueError):
-        Graph(num_nodes=6, senders=torch.tensor([0, 1, 1000]), receivers=torch.tensor([3, 4, 5]))
+        Graph(num_nodes=6, senders=torch.tensor([0, 1, 1000]), receivers=torch.tensor([3, 4, 5])).validate()
 
     # Indexes out-of-bounds
     with pytest.raises(ValueError):
-        Graph(num_nodes=6, senders=torch.tensor([0, 1, 2]), receivers=torch.tensor([3, 4, 1000]))
+        Graph(num_nodes=6, senders=torch.tensor([0, 1, 2]), receivers=torch.tensor([3, 4, 1000])).validate()
 
     # Indexes out-of-bounds
     with pytest.raises(ValueError):
-        Graph(num_nodes=6, senders=torch.tensor([-1000, 1, 2]), receivers=torch.tensor([3, 4, 5]))
+        Graph(num_nodes=6, senders=torch.tensor([-1000, 1, 2]), receivers=torch.tensor([3, 4, 5])).validate()
 
     # Indexes out-of-bounds
     with pytest.raises(ValueError):
-        Graph(num_nodes=6, senders=torch.tensor([0, 1, 2]), receivers=torch.tensor([-1000, 4, 5]))
+        Graph(num_nodes=6, senders=torch.tensor([0, 1, 2]), receivers=torch.tensor([-1000, 4, 5])).validate()
 
     # Senders, receivers and number of edges given, but not matching features
     with pytest.raises(ValueError):
-        Graph(num_nodes=6, senders=torch.tensor([0, 1]), receivers=torch.tensor([3, 4]), edge_features=torch.rand(9, 2))
+        Graph(num_nodes=6, senders=torch.tensor([0, 1]), receivers=torch.tensor([3, 4]),
+              edge_features=torch.rand(9, 2)).validate()
 
 
 def test_globals():
@@ -110,6 +101,7 @@ def test_globals():
 
 
 def validate_graph(graph: Graph):
+    graph.validate()
     assert graph.num_nodes >= 0
     assert graph.num_edges >= 0
     assert graph.node_features is None or graph.num_nodes == len(graph.node_features)

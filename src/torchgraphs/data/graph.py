@@ -1,6 +1,5 @@
 from __future__ import annotations
 from typing import Optional
-import dataclasses
 
 import torch
 import networkx as nx
@@ -8,11 +7,26 @@ import networkx as nx
 from .base import _BaseGraph
 
 
-@dataclasses.dataclass
 class Graph(_BaseGraph):
-    global_features: Optional[torch.Tensor] = None
-
     _feature_fields = _BaseGraph._feature_fields + ('global_features',)
+
+    def __init__(
+            self,
+            num_nodes: Optional[int] = None,
+            senders: Optional[torch.LongTensor] = None,
+            receivers: Optional[torch.LongTensor] = None,
+            node_features: Optional[torch.Tensor] = None,
+            edge_features: Optional[torch.Tensor] = None,
+            global_features: Optional[torch.Tensor] = None,
+    ):
+        self.global_features: Optional[torch.Tensor] = global_features
+        super(Graph, self).__init__(
+            num_nodes=num_nodes,
+            node_features=node_features,
+            edge_features=edge_features,
+            senders=senders,
+            receivers=receivers
+        )
 
     @property
     def global_features_shape(self):
@@ -83,7 +97,6 @@ class Graph(_BaseGraph):
 
         return cls(
             num_nodes=graph_nx.number_of_nodes(),
-            num_edges=graph_nx.number_of_edges(),
             node_features=node_features,
             edge_features=edge_features,
             senders=senders,

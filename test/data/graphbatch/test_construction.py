@@ -34,10 +34,10 @@ def test_corner_cases(features_shapes, device):
     # Only some graphs have node/edge features, global features are either present on all of them or absent from all
     gfs = features_shapes['global_features_shape']
     graphs = [
-        add_random_features(Graph(num_nodes=0, num_edges=0), global_features_shape=gfs),
-        add_random_features(Graph(num_nodes=0, num_edges=0), global_features_shape=gfs),
-        add_random_features(Graph(num_nodes=3, num_edges=0), **features_shapes),
-        add_random_features(Graph(num_nodes=0, num_edges=0), **features_shapes),
+        add_random_features(Graph(num_nodes=0), global_features_shape=gfs),
+        add_random_features(Graph(num_nodes=0), global_features_shape=gfs),
+        add_random_features(Graph(num_nodes=3), **features_shapes),
+        add_random_features(Graph(num_nodes=0), **features_shapes),
         add_random_features(
             Graph(num_nodes=2, senders=torch.tensor([0, 1]), receivers=torch.tensor([1, 0])), **features_shapes)
     ]
@@ -50,14 +50,14 @@ def test_corner_cases(features_shapes, device):
     # Global features should be either present on all graphs or absent from all graphs
     with pytest.raises(ValueError):
         GraphBatch.from_graphs([
-            Graph(num_nodes=0, num_edges=0),
-            add_random_features(Graph(num_nodes=0, num_edges=0), global_features_shape=10)
-        ])
+            Graph(num_nodes=0),
+            add_random_features(Graph(num_nodes=0), global_features_shape=10)
+        ]).validate()
     with pytest.raises(ValueError):
         GraphBatch.from_graphs([
-            add_random_features(Graph(num_nodes=0, num_edges=0), global_features_shape=10),
-            Graph(num_nodes=0, num_edges=0)
-        ])
+            add_random_features(Graph(num_nodes=0), global_features_shape=10),
+            Graph(num_nodes=0)
+        ]).validate()
 
 
 def test_from_graphs(graphs, features_shapes, device):
@@ -80,6 +80,7 @@ def test_from_graphs(graphs, features_shapes, device):
 
 
 def validate_batch(graphbatch):
+    graphbatch.validate()
     assert len(graphbatch) == graphbatch.num_graphs
     assert (graphbatch.senders < graphbatch.num_nodes).all()
     assert (graphbatch.receivers < graphbatch.num_nodes).all()

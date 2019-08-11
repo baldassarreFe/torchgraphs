@@ -1,68 +1,47 @@
-import dataclasses
 from typing import Optional, Iterator
 
 import torch
 import torch_scatter
 
 
-@dataclasses.dataclass
-class _BaseGraph(object):
-    num_nodes: int = None
-    num_edges: int = None
-    node_features: Optional[torch.Tensor] = None
-    edge_features: Optional[torch.Tensor] = None
-    senders: torch.LongTensor = None
-    receivers: torch.LongTensor = None
+class GraphError(ValueError):
+    pass
 
+
+class _BaseGraph(object):
     _feature_fields = ('node_features', 'edge_features')
     _index_fields = ('senders', 'receivers')
 
-    def __post_init__(self):
-        # Try filling in missing info
-        if self.num_nodes is None:
-            self.num_nodes = len(self.node_features) if self.node_features is not None else 0
-        if self.num_edges is None or self.num_edges == 0:
-            if self.senders is None:
-                self.senders = torch.LongTensor()
-            if self.receivers is None:
-                self.receivers = torch.LongTensor()
-            self.num_edges = len(self.senders)
-        self._validate()
+    def __init__(
+            self,
+            num_nodes: Optional[int] = None,
+            senders: Optional[torch.LongTensor] = None,
+            receivers: Optional[torch.LongTensor] = None,
+            node_features: Optional[torch.Tensor] = None,
+            edge_features: Optional[torch.Tensor] = None,
+    ):
+        self.node_features: Optional[torch.Tensor] = node_features
+        self.edge_features: Optional[torch.Tensor] = edge_features
+        self.senders: torch.LongTensor = torch.tensor([], dtype=torch.long) if senders is None else senders
+        self.receivers: torch.LongTensor = torch.tensor([], dtype=torch.long) if receivers is None else receivers
+        self._num_nodes: Optional[int] = num_nodes
 
-    def _validate(self):
-        # Check nodes
-        if self.num_nodes is None or self.num_nodes < 0:
-            raise ValueError(f"`num_nodes` cannot be None or negative, got {self.num_nodes}")
-        if self.node_features is not None and len(self.node_features) != self.num_nodes:
-            raise ValueError(f"`num_nodes`, `len(node_features)` must match, "
-                             f"got {self.num_nodes}, {len(self.node_features)}")
+    @property
+    def num_nodes(self):
+        if self._num_nodes is not None:
+            return self._num_nodes
+        if self.node_features is not None:
+            return len(self.node_features)
+        return 0
 
-        # Check edges
-        if self.num_edges is None or self.num_nodes < 0:
-            raise ValueError(f"`num_edges` cannot be None or negative, got {self.num_edges}")
-        if self.senders is None or self.receivers is None:
-            raise ValueError(f"`senders`, `receivers` cannot be None")
-        if not (self.num_edges == len(self.senders) == len(self.receivers)):
-            raise ValueError(f"`num_edges`, `len(senders)`, `len(receivers)` must match, "
-                             f"got {self.num_edges}, {len(self.senders)}, {len(self.receivers)}")
-        if self.edge_features is not None and len(self.edge_features) != self.num_edges:
-            raise ValueError(f"`num_edges`, `len(edge_features)` must match, "
-                             f"got {self.num_edges}, {len(self.edge_features)}")
-
-        # Check out-of-bounds edge indexes
-        send_oob = (self.senders < 0) | (self.senders >= self.num_nodes)
-        recv_oob = (self.receivers < 0) | (self.receivers >= self.num_nodes)
-        if send_oob.any():
-            wrongs = [f'{s.item()} -> {r.item()}' for s, r in zip(self.senders[send_oob], self.receivers[send_oob])]
-            raise ValueError(f"Edge sender out of bounds for: {wrongs}")
-        if recv_oob.any():
-            wrongs = [f'{s.item()} -> {r.item()}' for s, r in zip(self.senders[recv_oob], self.receivers[recv_oob])]
-            raise ValueError(f"Edge receiver out of bounds for: {wrongs}")
+    @property
+    def num_edges(self):
+        return len(self.senders)
 
     @property
     def sender_features(self):
         """For every edge, the features of the sender node.
-        
+
         Examples:
             * Access the sender's features of a single edge
 
@@ -235,15 +214,21 @@ class _BaseGraph(object):
         return self.to(device, non_blocking)
 
     def to(self, device, non_blocking=False):
-        feature_fields = {
+        return self.evolve(**{
             field_name: getattr(self, field_name).to(device=device, non_blocking=non_blocking)
-            for field_name in self._feature_fields if getattr(self, field_name) is not None
-        }
-        index_fields = {
-            field_name: getattr(self, field_name).to(device=device, non_blocking=non_blocking)
-            for field_name in self._index_fields
-        }
-        return self.evolve(**index_fields, **feature_fields)
+            for field_name in self._feature_fields + self._index_fields if getattr(self, field_name) is not None
+        })
+
+    def detach(self, device, non_blocking=False):
+        return self.evolve(**{
+            field_name: getattr(self, field_name).detach()
+            for field_name in self._feature_fields + self._index_fields if getattr(self, field_name) is not None
+        })
+
+    def detach_(self, device, non_blocking=False):
+        for field_name in self._feature_fields + self._index_fields:
+            if getattr(self, field_name) is not None:
+                getattr(self, field_name).detach_()
 
     def pin_memory(self):
         for field_name in self._index_fields + self._feature_fields:
@@ -264,7 +249,37 @@ class _BaseGraph(object):
         return self
 
     def evolve(self, **updates):
-        return dataclasses.replace(self, **updates)
+        old = {k.lstrip('_'): v for k, v in vars(self).items()}
+        old.update(updates)
+        return self.__class__(**old)
+
+    def validate(self):
+        # Check nodes
+        if self.num_nodes is None or self.num_nodes < 0:
+            raise ValueError(f"`num_nodes` cannot be None or negative, got {self.num_nodes}")
+        if self.node_features is not None and len(self.node_features) != self.num_nodes:
+            raise ValueError(f"`num_nodes`, `len(node_features)` must match, "
+                             f"got {self.num_nodes}, {len(self.node_features)}")
+
+        # Check edges
+        if len(self.senders) != len(self.receivers):
+            raise ValueError(f"`len(senders)`, `len(receivers)` must match, "
+                             f"got {self.num_edges}, {len(self.senders)}, {len(self.receivers)}")
+        if self.edge_features is not None and len(self.edge_features) != self.num_edges:
+            raise ValueError(f"`num_edges`, `len(edge_features)` must match, "
+                             f"got {self.num_edges}, {len(self.edge_features)}")
+
+        # Check out-of-bounds edge indexes
+        send_oob = (self.senders < 0) | (self.senders >= self.num_nodes)
+        recv_oob = (self.receivers < 0) | (self.receivers >= self.num_nodes)
+        if send_oob.any():
+            wrongs = [f'{s.item()} -> {r.item()}' for s, r in zip(self.senders[send_oob], self.receivers[send_oob])]
+            raise ValueError(f"With `num_nodes`={self.num_nodes}, edge sender is out of bounds for: {wrongs}")
+        if recv_oob.any():
+            wrongs = [f'{s.item()} -> {r.item()}' for s, r in zip(self.senders[recv_oob], self.receivers[recv_oob])]
+            raise ValueError(f"With `num_nodes`={self.num_nodes}, edge receiver is out of bounds for: {wrongs}")
+
+        return self
 
 
 class _InOutEdgeView(object):

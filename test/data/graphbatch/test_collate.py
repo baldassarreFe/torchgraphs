@@ -13,6 +13,8 @@ def test_collate_tuples(graphs_nx, features_shapes, device):
 
     samples = list(zip(graphs_in, xs, ys, graphs_out))
     batch = GraphBatch.collate(samples)
+    batch[0].validate()
+    batch[3].validate()
 
     for g1, g2 in zip(graphs_in, batch[0]):
         assert_graphs_equal(g1, g2)
@@ -33,6 +35,8 @@ def test_collate_dicts(graphs_nx, features_shapes, device):
 
     samples = [{'in': gi, 'x': x, 'y': y, 'out': go} for gi, x, y, go in zip(graphs_in, xs, ys, graphs_out)]
     batch = GraphBatch.collate(samples)
+    batch['in'].validate()
+    batch['out'].validate()
 
     for g1, g2 in zip(graphs_in, batch['in']):
         assert_graphs_equal(g1, g2)

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import dataclasses
 import collections.abc
 from typing import Iterator, Sequence, Iterable, Optional, Tuple
 
@@ -9,70 +8,108 @@ import torch
 import torch_scatter
 from torch.utils.data._utils.collate import default_collate
 
-from .base import _BaseGraph
+from .base import _BaseGraph, GraphError
 from .graph import Graph
 from ..utils import segment_lengths_to_slices, segment_lengths_to_ids
 
 
-@dataclasses.dataclass
 class GraphBatch(_BaseGraph):
-    num_graphs: int = None
-    global_features: Optional[torch.Tensor] = None
-    num_nodes_by_graph: torch.LongTensor = None
-    num_edges_by_graph: torch.LongTensor = None
-    node_index_by_graph: torch.LongTensor = dataclasses.field(init=False)
-    edge_index_by_graph: torch.LongTensor = dataclasses.field(init=False)
-
     _feature_fields = _BaseGraph._feature_fields + ('global_features',)
-    _index_fields = _BaseGraph._index_fields + ('num_nodes_by_graph', 'num_edges_by_graph')
+    _index_fields = _BaseGraph._index_fields + ('num_nodes_by_graph', 'num_edges_by_graph',
+                                                'node_index_by_graph', 'edge_index_by_graph')
 
-    def __post_init__(self):
-        # super().__post_init__() will also validate the instance using the _validate methods,
-        # so we first fill in missing values that are will be used in self._validate()
-        if self.num_graphs is None:
-            if self.num_nodes_by_graph is not None:
-                self.num_graphs = len(self.num_nodes_by_graph)
-            elif self.num_nodes_by_graph is not None:
-                self.num_graphs = len(self.num_nodes_by_graph)
-            elif self.global_features is not None:
-                self.num_graphs = len(self.global_features)
-            else:
-                raise ValueError('Could not infer number of graphs from batch fields')
+    def __init__(
+            self,
+            num_nodes: Optional[int] = None,
+            num_graphs: Optional[int] = None,
+            senders: Optional[torch.LongTensor] = None,
+            num_nodes_by_graph: Optional[torch.LongTensor] = None,
+            num_edges_by_graph: Optional[torch.LongTensor] = None,
+            receivers: Optional[torch.LongTensor] = None,
+            node_features: Optional[torch.Tensor] = None,
+            edge_features: Optional[torch.Tensor] = None,
+            global_features: Optional[torch.Tensor] = None,
+            node_index_by_graph: Optional[torch.LongTensor] = None,
+            edge_index_by_graph: Optional[torch.LongTensor] = None,
+    ):
+        self._num_graphs: Optional[int] = num_graphs
+        self.global_features: Optional[torch.Tensor] = global_features
 
-        if self.num_nodes_by_graph is None and self.num_nodes == 0:
+        # Assign num_nodes_by_graph first, so that if needed num_graphs finds the field on the instance
+        self.num_nodes_by_graph: torch.LongTensor = num_nodes_by_graph
+        if self.num_nodes_by_graph is None:
             self.num_nodes_by_graph = torch.zeros(self.num_graphs, dtype=torch.long)
-        if self.num_edges_by_graph is None and self.num_edges == 0:
+        # Assign num_edges_by_graph first, so that if needed num_graphs finds the field on the instance
+        self.num_edges_by_graph: torch.LongTensor = num_edges_by_graph
+        if self.num_edges_by_graph is None:
             self.num_edges_by_graph = torch.zeros(self.num_graphs, dtype=torch.long)
 
-        self.node_index_by_graph = segment_lengths_to_ids(self.num_nodes_by_graph)
-        self.edge_index_by_graph = segment_lengths_to_ids(self.num_edges_by_graph)
+        self.node_index_by_graph: torch.LongTensor = segment_lengths_to_ids(self.num_nodes_by_graph) \
+            if node_index_by_graph is None else node_index_by_graph
+        self.edge_index_by_graph: torch.LongTensor = segment_lengths_to_ids(self.num_edges_by_graph) \
+            if edge_index_by_graph is None else edge_index_by_graph
 
-        super(GraphBatch, self).__post_init__()
+        if num_nodes is None:
+            num_nodes = num_nodes_by_graph.sum()
 
-    def _validate(self):
-        super(GraphBatch, self)._validate()
+        super(GraphBatch, self).__init__(
+            num_nodes=num_nodes,
+            node_features=node_features,
+            edge_features=edge_features,
+            senders=senders,
+            receivers=receivers
+        )
 
-        if self.global_features is not None and self.num_graphs != len(self.global_features):
+    @property
+    def num_graphs(self):
+        if self._num_graphs is not None:
+            return self._num_graphs
+        if self.global_features is not None:
+            return len(self.global_features)
+        if self.num_nodes_by_graph is not None:
+            return len(self.num_nodes_by_graph)
+        if self.num_edges_by_graph is not None:
+            return len(self.num_edges_by_graph)
+        raise GraphError('Could not infer number of graphs from batch fields')
+
+    def validate(self):
+        if self.global_features is not None and self._num_graphs is not None and \
+                self._num_graphs != len(self.global_features):
             raise ValueError(f'Total number of graphs and length of global features must correspond: '
-                             f'`num_graphs`={self.num_graphs} '
-                             f'`len(self.global_features)`={len(self.global_features)}')
+                             f'`num_graphs` (given to `__init__`)={self._num_graphs} '
+                             f'`len(global_features)`={len(self.global_features)}')
+
         if self.num_graphs != len(self.num_nodes_by_graph):
-            raise ValueError(f'Total number of graphs and length of nodes by graph must correspond: '
+            raise ValueError(f'Total number of graphs and length of num nodes by graph must correspond: '
                              f'`num_graphs`={self.num_graphs} '
-                             f'`len(self.num_nodes_by_graph)`={len(self.num_nodes_by_graph)}')
+                             f'`len(num_nodes_by_graph)`={len(self.num_nodes_by_graph)}')
+
         if self.num_graphs != len(self.num_edges_by_graph):
-            raise ValueError(f'Total number of graphs and length of edges by graph must correspond: '
+            raise ValueError(f'Total number of graphs and length of num edges by graph must correspond: '
                              f'`num_graphs`={self.num_graphs} '
-                             f'`len(self.num_edges_by_graph)`={len(self.num_edges_by_graph)}')
+                             f'`len(num_edges_by_graph)`={len(self.num_edges_by_graph)}')
 
         if self.num_nodes != self.num_nodes_by_graph.sum():
-            raise ValueError(f'Total number of nodes and number of nodes by graph must correspond: '
+            raise ValueError(f'Total number of nodes and sum of number of nodes by graph must correspond: '
                              f'`num_nodes`={self.num_nodes} '
-                             f'`sum(self.num_nodes_by_graph)`={self.num_nodes_by_graph.sum().item()}')
+                             f'`sum(num_nodes_by_graph)`={self.num_nodes_by_graph.sum().item()}')
+
+        if self.num_nodes != len(self.node_index_by_graph):
+            raise ValueError(f'Total number of nodes and length of node-to-graph assignments must correspond: '
+                             f'`num_nodes`={self.num_nodes} '
+                             f'`sum(num_nodes_by_graph)`={len(self.node_index_by_graph)}')
+
         if self.num_edges != self.num_edges_by_graph.sum():
-            raise ValueError(f'Total number of edges and number of edges by graph must correspond: '
+            raise ValueError(f'Total number of edges and sum of number of edges by graph must correspond: '
                              f'`num_edges`={self.num_edges} '
-                             f'`sum(self.num_edges_by_graph)`={self.num_edges_by_graph.sum().item()}')
+                             f'`sum(num_edges_by_graph)`={self.num_edges_by_graph.sum().item()}')
+
+        if self.num_edges != len(self.edge_index_by_graph):
+            raise ValueError(f'Total number of edges and length of edge-to-graph assignments must correspond: '
+                             f'`num_edges`={self.num_edges} '
+                             f'`sum(num_edges_by_graph)`={len(self.edge_index_by_graph)}')
+
+        return super(GraphBatch, self).validate()
 
     def __len__(self):
         return self.num_graphs
@@ -156,10 +193,12 @@ class GraphBatch(_BaseGraph):
         n_edges = self.num_edges_by_graph[graph_index]
         return Graph(
             num_nodes=n_nodes.item(),
-            num_edges=n_edges.item(),
-            node_features=None if self.node_features is None else self.node_features[node_offset:node_offset + n_nodes],
-            edge_features=None if self.edge_features is None else self.edge_features[edge_offset:edge_offset + n_edges],
-            global_features=self.global_features[graph_index] if self.global_features is not None else None,
+            node_features=self.node_features[self.node_index_by_graph == graph_index]
+                if self.node_features is not None else None,
+            edge_features=self.edge_features[self.edge_index_by_graph == graph_index]
+                if self.edge_features is not None else None,
+            global_features=self.global_features[graph_index]
+                if self.global_features is not None else None,
             senders=self.senders[edge_offset:edge_offset + n_edges] - node_offset,
             receivers=self.receivers[edge_offset:edge_offset + n_edges] - node_offset
         )
@@ -172,7 +211,6 @@ class GraphBatch(_BaseGraph):
         for graph_index, node_slice, edge_slice in zip(range(self.num_graphs), node_slices, edge_slices):
             yield Graph(
                 num_nodes=self.num_nodes_by_graph[graph_index].item(),
-                num_edges=self.num_edges_by_graph[graph_index].item(),
                 node_features=self.node_features[node_slice] if self.node_features is not None else None,
                 edge_features=self.edge_features[edge_slice] if self.edge_features is not None else None,
                 global_features=self.global_features[graph_index] if self.global_features is not None else None,
@@ -281,7 +319,6 @@ class GraphBatch(_BaseGraph):
 
         return cls(
             num_nodes=node_offset,
-            num_edges=len(senders),
             num_nodes_by_graph=senders.new_tensor(num_nodes_by_graph),
             num_edges_by_graph=senders.new_tensor(num_edges_by_graph),
             node_features=node_features,
