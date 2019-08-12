@@ -10,7 +10,7 @@ see the official installation [instruction](https://pytorch.org/).
 
 All requirements listed in [requirements.txt](./requirements.txt) will be installed automatically when running:
 ```bash
-pip install https://github.com/baldassarreFe/torchgraphs
+pip install git+https://github.com/baldassarreFe/torchgraphs
 ```
 
 To develop the library itself, a conda environment with additional dependencies is provided, 

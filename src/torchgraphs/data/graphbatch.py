@@ -269,11 +269,11 @@ class GraphBatch(_BaseGraph):
             receivers.append(g.receivers + node_offset)
             node_offset += g.num_nodes
 
-        from torch.utils.data._utils.collate import _use_shared_memory
+        use_shared_memory = torch.utils.data.get_worker_info() is not None
 
         if len(node_features) > 0:
             out = None
-            if _use_shared_memory:
+            if use_shared_memory:
                 numel = sum([x.numel() for x in node_features])
                 storage = node_features[0].storage()._new_shared(numel)
                 out = node_features[0].new(storage)
@@ -283,7 +283,7 @@ class GraphBatch(_BaseGraph):
 
         if len(edge_features) > 0:
             out = None
-            if _use_shared_memory:
+            if use_shared_memory:
                 numel = sum([x.numel() for x in edge_features])
                 storage = edge_features[0].storage()._new_shared(numel)
                 out = edge_features[0].new(storage)
@@ -293,7 +293,7 @@ class GraphBatch(_BaseGraph):
 
         if len(global_features) == len(graphs):
             out = None
-            if _use_shared_memory:
+            if use_shared_memory:
                 numel = sum([x.numel() for x in global_features])
                 storage = global_features[0].storage()._new_shared(numel)
                 out = global_features[0].new(storage)
@@ -304,14 +304,14 @@ class GraphBatch(_BaseGraph):
             raise ValueError('The field `global_features` must either be None on all graphs or present on all graphs')
 
         out = None
-        if _use_shared_memory:
+        if use_shared_memory:
             numel = sum([x.numel() for x in senders])
             storage = graphs[0].senders.storage()._new_shared(numel)
             out = senders[0].new(storage)
         senders = torch.cat(senders, out=out)
 
         out = None
-        if _use_shared_memory:
+        if use_shared_memory:
             numel = sum([x.numel() for x in receivers])
             storage = graphs[0].receivers.storage()._new_shared(numel)
             out = receivers[0].new(storage)
