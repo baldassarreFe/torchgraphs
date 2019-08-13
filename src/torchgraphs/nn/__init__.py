@@ -5,4 +5,5 @@ from .functions import \
     EdgeFunction, NodeFunction, GlobalFunction, \
     EdgeReLU, NodeReLU, GlobalReLU, \
     EdgeSigmoid, NodeSigmoid, GlobalSigmoid, \
-    EdgeDropout, NodeDropout, GlobalDropout
+    EdgeDropout, NodeDropout, GlobalDropout, \
+    EdgeBatchNorm, NodeBatchNorm, GlobalBatchNorm

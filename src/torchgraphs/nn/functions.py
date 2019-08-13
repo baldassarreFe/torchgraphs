@@ -69,3 +69,18 @@ class NodeDropout(NodeFunction):
 class GlobalDropout(GlobalFunction):
     def __init__(self, p=0.5, inplace=False):
         super(GlobalDropout, self).__init__(torch.nn.Dropout(p, inplace))
+
+
+class EdgeBatchNorm(EdgeFunction):
+    def __init__(self, num_features):
+        super(EdgeBatchNorm, self).__init__(torch.nn.BatchNorm1d(num_features=num_features))
+
+
+class NodeBatchNorm(NodeFunction):
+    def __init__(self, num_features):
+        super(NodeBatchNorm, self).__init__(torch.nn.BatchNorm1d(num_features=num_features))
+
+
+class GlobalBatchNorm(GlobalFunction):
+    def __init__(self, num_features):
+        super(GlobalBatchNorm, self).__init__(torch.nn.BatchNorm1d(num_features=num_features))

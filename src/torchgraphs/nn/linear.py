@@ -96,6 +96,8 @@ class GlobalLinear(nn.Module):
     def __init__(self, out_features, node_features=None, edge_features=None, global_features=None,
                  aggregation=None, bias=True):
         super(GlobalLinear, self).__init__()
+        self.out_features = out_features
+
         self.W_node = nn.Parameter(torch.Tensor(out_features, node_features)) \
             if node_features is not None else None
         self.W_edges = nn.Parameter(torch.Tensor(out_features, edge_features)) \
