@@ -61,7 +61,11 @@ def test_linear_graph_network(graphbatch: GraphBatch, device):
     assert graphbatch.num_graphs == result.num_graphs
     assert graphbatch.num_nodes == result.num_nodes
     assert graphbatch.num_edges == result.num_edges
-    assert (graphbatch.num_nodes_by_graph == result.num_nodes_by_graph).all()
-    assert (graphbatch.num_edges_by_graph == result.num_edges_by_graph).all()
-    assert (graphbatch.senders == result.senders).all()
-    assert (graphbatch.receivers == result.receivers).all()
+
+    # These tensors should be passed as they are through the network, never copied
+    assert graphbatch.node_index_by_graph is result.node_index_by_graph
+    assert graphbatch.edge_index_by_graph is result.edge_index_by_graph
+    assert graphbatch.num_nodes_by_graph is result.num_nodes_by_graph
+    assert graphbatch.num_edges_by_graph is result.num_edges_by_graph
+    assert graphbatch.senders is result.senders
+    assert graphbatch.receivers is result.receivers
