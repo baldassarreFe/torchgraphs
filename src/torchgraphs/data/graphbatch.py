@@ -8,15 +8,13 @@ import torch
 import torch_scatter
 from torch.utils.data._utils.collate import default_collate
 
-from .base import _BaseGraph, GraphError
 from .graph import Graph
-from ..utils import segment_lengths_to_slices, segment_lengths_to_ids
+from ..utils import GraphError, segment_lengths_to_slices, segment_lengths_to_ids
 
 
-class GraphBatch(_BaseGraph):
-    _feature_fields = _BaseGraph._feature_fields + ('global_features',)
-    _index_fields = _BaseGraph._index_fields + ('num_nodes_by_graph', 'num_edges_by_graph',
-                                                'node_index_by_graph', 'edge_index_by_graph')
+class GraphBatch(Graph):
+    _index_fields = Graph._index_fields + \
+                    ('num_nodes_by_graph', 'num_edges_by_graph', 'node_index_by_graph', 'edge_index_by_graph')
 
     def __init__(
             self,
@@ -32,51 +30,60 @@ class GraphBatch(_BaseGraph):
             node_index_by_graph: Optional[torch.LongTensor] = None,
             edge_index_by_graph: Optional[torch.LongTensor] = None,
     ):
-        self._num_graphs: Optional[int] = num_graphs
-        self.global_features: Optional[torch.Tensor] = global_features
+        self.num_graphs: int
+        self.num_nodes_by_graph: torch.LongTensor
+        self.num_edges_by_graph: torch.LongTensor
+        self.node_index_by_graph: torch.LongTensor
+        self.edge_index_by_graph: torch.LongTensor
 
-        # Assign num_nodes_by_graph first, so that if needed num_graphs finds the field on the instance
-        self.num_nodes_by_graph: torch.LongTensor = num_nodes_by_graph
-        if self.num_nodes_by_graph is None:
+        if num_graphs is not None:
+            self.num_graphs = num_graphs
+        elif global_features is not None:
+            self.num_graphs = len(global_features)
+        elif num_nodes_by_graph is not None:
+            self.num_graphs = len(num_nodes_by_graph)
+        elif num_edges_by_graph is not None:
+            self.num_graphs = len(num_edges_by_graph)
+        else:
+            raise GraphError('Could not infer number of graphs from batch fields')
+
+        if num_nodes_by_graph is None:
             self.num_nodes_by_graph = torch.zeros(self.num_graphs, dtype=torch.long)
-        # Assign num_edges_by_graph first, so that if needed num_graphs finds the field on the instance
-        self.num_edges_by_graph: torch.LongTensor = num_edges_by_graph
-        if self.num_edges_by_graph is None:
-            self.num_edges_by_graph = torch.zeros(self.num_graphs, dtype=torch.long)
+        else:
+            self.num_nodes_by_graph = num_nodes_by_graph
 
-        self.node_index_by_graph: torch.LongTensor = segment_lengths_to_ids(self.num_nodes_by_graph) \
-            if node_index_by_graph is None else node_index_by_graph
-        self.edge_index_by_graph: torch.LongTensor = segment_lengths_to_ids(self.num_edges_by_graph) \
-            if edge_index_by_graph is None else edge_index_by_graph
+        if num_edges_by_graph is None:
+            self.num_edges_by_graph = torch.zeros(self.num_graphs, dtype=torch.long)
+        else:
+            self.num_edges_by_graph = num_edges_by_graph
+
+        if node_index_by_graph is None:
+            self.node_index_by_graph = segment_lengths_to_ids(self.num_nodes_by_graph)
+        else:
+            self.node_index_by_graph = node_index_by_graph
+
+        if edge_index_by_graph is None:
+            self.edge_index_by_graph = segment_lengths_to_ids(self.num_edges_by_graph)
+        else:
+            self.edge_index_by_graph = edge_index_by_graph
 
         if num_nodes is None:
-            num_nodes = num_nodes_by_graph.sum()
+            num_nodes = num_nodes_by_graph.sum().item()
 
         super(GraphBatch, self).__init__(
             num_nodes=num_nodes,
+            senders=senders,
+            receivers=receivers,
             node_features=node_features,
             edge_features=edge_features,
-            senders=senders,
-            receivers=receivers
+            global_features=global_features,
         )
 
-    @property
-    def num_graphs(self):
-        if self._num_graphs is not None:
-            return self._num_graphs
-        if self.global_features is not None:
-            return len(self.global_features)
-        if self.num_nodes_by_graph is not None:
-            return len(self.num_nodes_by_graph)
-        if self.num_edges_by_graph is not None:
-            return len(self.num_edges_by_graph)
-        raise GraphError('Could not infer number of graphs from batch fields')
-
     def validate(self):
-        if self.global_features is not None and self._num_graphs is not None and \
-                self._num_graphs != len(self.global_features):
+        if self.global_features is not None and self.num_graphs is not None and \
+                self.num_graphs != len(self.global_features):
             raise ValueError(f'Total number of graphs and length of global features must correspond: '
-                             f'`num_graphs` (given to `__init__`)={self._num_graphs} '
+                             f'`num_graphs` (given to `__init__`)={self.num_graphs} '
                              f'`len(global_features)`={len(self.global_features)}')
 
         if self.num_graphs != len(self.num_nodes_by_graph):
@@ -194,11 +201,11 @@ class GraphBatch(_BaseGraph):
         return Graph(
             num_nodes=n_nodes.item(),
             node_features=self.node_features[self.node_index_by_graph == graph_index]
-                if self.node_features is not None else None,
+            if self.node_features is not None else None,
             edge_features=self.edge_features[self.edge_index_by_graph == graph_index]
-                if self.edge_features is not None else None,
+            if self.edge_features is not None else None,
             global_features=self.global_features[graph_index]
-                if self.global_features is not None else None,
+            if self.global_features is not None else None,
             senders=self.senders[edge_offset:edge_offset + n_edges] - node_offset,
             receivers=self.receivers[edge_offset:edge_offset + n_edges] - node_offset
         )
@@ -217,7 +224,7 @@ class GraphBatch(_BaseGraph):
                 senders=self.senders[edge_slice] - node_slice.start,
                 receivers=self.receivers[edge_slice] - node_slice.start
             )
-    
+
     def __repr__(self):
         return (f"{self.__class__.__name__}("
                 f"#{self.num_graphs}, "
@@ -241,7 +248,7 @@ class GraphBatch(_BaseGraph):
         don't (maybe they were created with `num_nodes = 0` or `num_edges = 0` and None as node/edge features),
         this method will still try to correctly batch the graphs together. It is however advised to replace the None
         values on those graphs with empty tensors of shape `(0, *node_features_shape)` and `(0, *edge_features_shape)`.
-          
+
         The field `global_features` is instead required to be either present on all graphs or absent from all graphs.
         """
         # TODO if the graphs in `graphs` require grad the resulting batch should require grad too
@@ -255,7 +262,7 @@ class GraphBatch(_BaseGraph):
         num_edges_by_graph = []
         senders = []
         receivers = []
-        node_offset = 0
+        edge_offset = 0
         for i, g in enumerate(graphs):
             if g.node_features is not None:
                 node_features.append(g.node_features)
@@ -265,9 +272,12 @@ class GraphBatch(_BaseGraph):
                 global_features.append(g.global_features)
             num_nodes_by_graph.append(g.num_nodes)
             num_edges_by_graph.append(g.num_edges)
-            senders.append(g.senders + node_offset)
-            receivers.append(g.receivers + node_offset)
-            node_offset += g.num_nodes
+            senders.append(g.senders + edge_offset)
+            receivers.append(g.receivers + edge_offset)
+            edge_offset += g.num_nodes
+
+        if len(global_features) != 0 and len(global_features) != len(graphs):
+            raise ValueError('The field `global_features` must either be None on all graphs or present on all graphs')
 
         use_shared_memory = torch.utils.data.get_worker_info() is not None
 
@@ -291,17 +301,15 @@ class GraphBatch(_BaseGraph):
         else:
             edge_features = None
 
-        if len(global_features) == len(graphs):
+        if len(global_features) > 0:
             out = None
             if use_shared_memory:
                 numel = sum([x.numel() for x in global_features])
                 storage = global_features[0].storage()._new_shared(numel)
                 out = global_features[0].new(storage)
             global_features = torch.stack(global_features, out=out)
-        elif len(global_features) == 0:
-            global_features = None
         else:
-            raise ValueError('The field `global_features` must either be None on all graphs or present on all graphs')
+            global_features = None
 
         out = None
         if use_shared_memory:
@@ -318,7 +326,7 @@ class GraphBatch(_BaseGraph):
         receivers = torch.cat(receivers, out=out)
 
         return cls(
-            num_nodes=node_offset,
+            num_nodes=edge_offset,
             num_nodes_by_graph=senders.new_tensor(num_nodes_by_graph),
             num_edges_by_graph=senders.new_tensor(num_edges_by_graph),
             node_features=node_features,

@@ -4,6 +4,10 @@ import torch
 import numpy as np
 
 
+class GraphError(ValueError):
+    pass
+
+
 def repeat_tensor(input: torch.Tensor, repeats: torch.LongTensor, dim: int = 0) -> torch.Tensor:
     """ Repeats each entry of a tensor along a given dimension according to a tensor of repetitions,
     gradients can be computed w.r.t. `tensor`, but not w.r.t. `repeats`

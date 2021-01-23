@@ -40,18 +40,18 @@ def add_random_features(graph, *, node_features_shape=None, edge_features_shape=
         if global_features_shape is not None:
             graph.graph['features'] = torch.rand(*global_features_shape)
         return graph
-    elif isinstance(graph, Graph):
-        return graph.evolve(
-            node_features=None if node_features_shape is None else torch.rand(graph.num_nodes, *node_features_shape),
-            edge_features=None if edge_features_shape is None else torch.rand(graph.num_edges, *edge_features_shape),
-            global_features=None if global_features_shape is None else torch.rand(*global_features_shape)
-        )
     elif isinstance(graph, GraphBatch):
         return graph.evolve(
             node_features=None if node_features_shape is None else torch.rand(graph.num_nodes, *node_features_shape),
             edge_features=None if edge_features_shape is None else torch.rand(graph.num_edges, *edge_features_shape),
             global_features=None if global_features_shape is None else torch.rand(
                 graph.num_graphs, *global_features_shape)
+        )
+    elif isinstance(graph, Graph):
+        return graph.evolve(
+            node_features=None if node_features_shape is None else torch.rand(graph.num_nodes, *node_features_shape),
+            edge_features=None if edge_features_shape is None else torch.rand(graph.num_edges, *edge_features_shape),
+            global_features=None if global_features_shape is None else torch.rand(*global_features_shape)
         )
 
     raise ValueError(
